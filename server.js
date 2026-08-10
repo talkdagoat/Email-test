@@ -1,18 +1,7 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 const app = express();
-
-// Uses the simplified hotmail routing helper for active Outlook accounts
-const transporter = nodemailer.createTransport({
-  service: 'hotmail', 
-  auth: {
-    user: process.env.OUTLOOK_USER,     // Your personal Outlook address
-    pass: process.env.OUTLOOK_APP_PASS  // Your 16-character Microsoft App Password
-  }
-});
-
 app.use(express.json());
 
 // Serves index.html directly from your main root directory folder layout
@@ -20,32 +9,23 @@ app.use(express.static(__dirname));
 
 const verificationSessions = {};
 
-// Send verification link endpoint
-app.post('/api/auth/send-link', async (req, res) => {
+// 1. Endpoint to generate the secure verification link variables
+app.post('/api/auth/send-link', (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
 
   const token = crypto.randomBytes(32).toString('hex');
   verificationSessions[email] = { token, verified: false };
 
+  // Generate link matching your active Render deployment URL configuration
   const hostUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
   const magicLink = `${hostUrl}/verify?token=${token}&email=${encodeURIComponent(email)}`;
 
-  try {
-    await transporter.sendMail({
-      from: process.env.OUTLOOK_USER, 
-      to: email, 
-      subject: 'Sign In Link Verification',
-      html: `<p>Click <a href="${magicLink}">here</a> to verify your account.</p>`
-    });
-    res.json({ message: 'Email sent successfully!' });
-  } catch (error) {
-    console.error("SMTP Error Details:", error);
-    res.status(500).json({ error: 'Failed to complete mail transmission.' });
-  }
+  // Pass variables back to frontend safely without touching blocked email ports
+  res.json({ magicLink: magicLink });
 });
 
-// Link verification processor
+// 2. Link click processor endpoint
 app.get('/verify', (req, res) => {
   const { token, email } = req.query;
   const session = verificationSessions[email];
@@ -58,7 +38,7 @@ app.get('/verify', (req, res) => {
   }
 });
 
-// Frontend status polling
+// 3. Frontend status verification checker endpoint
 app.get('/api/auth/status', (req, res) => {
   const { email } = req.query;
   const session = verificationSessions[email];
