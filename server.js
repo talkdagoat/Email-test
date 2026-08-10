@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const app = express();
 
 // Initialize Resend directly with your provided API key
-const resend = new Resend('re_WMHLAo3u_4LktAv3M7bcvVuACDZLTVeSt');
+const resend = new Resend('re_jABRzyna_4huqHNwBDpSUNNt3e9TY3o7Q');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
