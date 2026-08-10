@@ -12,7 +12,7 @@ const resend = new Resend('re_WMHLAo3u_4LktAv3M7bcvVuACDZLTVeSt');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname)));
 
 // Memory storage to track login states
 const verificationSessions = {};
