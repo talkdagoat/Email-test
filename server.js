@@ -1,23 +1,35 @@
 import express from 'express';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const app = express();
 
-// Initialize Resend directly with your provided API key
-const resend = new Resend(process.env.R);
+// Configure Nodemailer to route traffic via Microsoft Outlook
+const transporter = nodemailer.createTransport({
+  host: "://office365.com",
+  port: 587,
+  secure: false, // Required TLS configuration sequence
+  auth: {
+    user: process.env.OUTLOOK_USER,     // Your personal Outlook email address
+    pass: process.env.OUTLOOK_APP_PASS  // Your 16-character Microsoft App Password
+  },
+  tls: {
+    ciphers: 'SSLv3'
+  }
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
 
-// Memory storage to track login states
+// FIXED: Serves your index.html file straight from the main root directory folder layout
+app.use(express.static(__dirname));
+
 const verificationSessions = {};
 
-// Secure email dispatch routing
+// Send verification link endpoint
 app.post('/api/auth/send-link', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
@@ -29,22 +41,22 @@ app.post('/api/auth/send-link', async (req, res) => {
   const magicLink = `${hostUrl}/verify?token=${token}&email=${encodeURIComponent(email)}`;
 
   try {
-    // Send the verification link dynamically to the email entered by the user
-    await resend.emails.send({
-      from: 'onboarding@resend.dev',
+    // Send email using your personal Outlook account
+    await transporter.sendMail({
+      from: process.env.OUTLOOK_USER, 
       to: email, 
-      subject: 'Hello World - Sign In Link',
-      html: `<p>Congrats on sending your <strong>first email</strong>! Click <a href="${magicLink}">here</a> to verify your account.</p>`
+      subject: 'Sign In Link Verification',
+      html: `<p>Click <a href="${magicLink}">here</a> to verify your account.</p>`
     });
     
     res.json({ message: 'Email sent successfully!' });
   } catch (error) {
-    console.error("Resend error:", error);
-    res.status(500).json({ error: 'Failed to dispatch email' });
+    console.error("Outlook Transmission Failure:", error);
+    res.status(500).json({ error: 'Failed to send mail via Outlook setup' });
   }
 });
 
-// Verification tracking router link
+// Link verification processor
 app.get('/verify', (req, res) => {
   const { token, email } = req.query;
   const session = verificationSessions[email];
@@ -57,7 +69,7 @@ app.get('/verify', (req, res) => {
   }
 });
 
-// Front-end polling status checker
+// Frontend status polling
 app.get('/api/auth/status', (req, res) => {
   const { email } = req.query;
   const session = verificationSessions[email];
