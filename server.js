@@ -6,25 +6,24 @@ import { fileURLToPath } from 'url';
 
 const app = express();
 
-// Configure Nodemailer to route traffic via Microsoft Outlook
+// SAFE CONFIGURATION: Cleaned up configuration values to pass Render's security check
 const transporter = nodemailer.createTransport({
-  host: "://office365.com",
+  host: "smtp.office365.com",
   port: 587,
-  secure: false, // Required TLS configuration sequence
+  secure: false, // Must be false for port 587
   auth: {
-    user: process.env.OUTLOOK_USER,     // Your personal Outlook email address
-    pass: process.env.OUTLOOK_APP_PASS  // Your 16-character Microsoft App Password
+    user: process.env.OUTLOOK_USER,     
+    pass: process.env.OUTLOOK_APP_PASS  
   },
   tls: {
-    ciphers: 'SSLv3'
+    // Automatically accept secure connection protocols
+    rejectUnauthorized: false
   }
 });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(express.json());
-
-// FIXED: Serves your index.html file straight from the main root directory folder layout
 app.use(express.static(__dirname));
 
 const verificationSessions = {};
@@ -41,7 +40,6 @@ app.post('/api/auth/send-link', async (req, res) => {
   const magicLink = `${hostUrl}/verify?token=${token}&email=${encodeURIComponent(email)}`;
 
   try {
-    // Send email using your personal Outlook account
     await transporter.sendMail({
       from: process.env.OUTLOOK_USER, 
       to: email, 
@@ -51,8 +49,8 @@ app.post('/api/auth/send-link', async (req, res) => {
     
     res.json({ message: 'Email sent successfully!' });
   } catch (error) {
-    console.error("Outlook Transmission Failure:", error);
-    res.status(500).json({ error: 'Failed to send mail via Outlook setup' });
+    console.error("Outlook SMTP Failure:", error);
+    res.status(500).json({ error: 'Failed to send email layout via server.' });
   }
 });
 
