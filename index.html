@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Render Mail Login</title>
+    <title>talkapp Login</title>
+    <!-- Include the safe EmailJS network browser script library -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #fafafa; margin: 0; }
         .box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 280px; text-align: center; border: 1px solid #eaeaea; }
@@ -16,44 +18,65 @@
 </head>
 <body>
 <div class="box">
-    <h3>Sign In</h3>
+    <h3>talkapp Sign In</h3>
     <input type="email" id="email" placeholder="name@domain.com" required>
     <button id="action-btn" onclick="requestLink()">Verify Email</button>
     <div id="status-box" class="alert-box error" style="display: none;"></div>
 </div>
+
 <script>
+    // --- COMPLETED EMAILJS KEY CONFIGURATION ---
+    const EMAILJS_PUBLIC_KEY = "rfbFho74v6R1nSzk5";
+    const EMAILJS_SERVICE_ID = "talkapp";
+    const EMAILJS_TEMPLATE_ID = "template_er3zdx5";
+    // -------------------------------------------
+
+    emailjs.init(EMAILJS_PUBLIC_KEY);
     let tracker;
+
     function updateStatus(message, isSuccess = false) {
         const statusBox = document.getElementById('status-box');
         statusBox.innerText = message;
         statusBox.style.display = 'block';
         statusBox.className = isSuccess ? 'alert-box success' : 'alert-box error';
     }
+
     async function requestLink() {
         const email = document.getElementById('email').value.trim();
         if (!email) return updateStatus('Please type an email address.');
         const btn = document.getElementById('action-btn');
         btn.innerText = 'Connecting...';
+
         try {
+            // Get secure token link from your active Render backend instance
             const res = await fetch(window.location.origin + '/api/auth/send-link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email })
             });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
+            
+            const data = await res.json();
+
+            if (res.ok && data.magicLink) {
+                // Route email payload securely over standard web port 443 via EmailJS API
+                await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                    to_email: email,
+                    verification_link: data.magicLink
+                });
+
                 btn.innerText = 'Sent!';
                 updateStatus('Link Dispatched! Check your email inbox.', true);
                 beginTracking(email);
             } else {
                 btn.innerText = 'Verify Email';
-                updateStatus('Server error: ' + (data.error || 'Check configuration keys.'));
+                updateStatus('Server initialization mismatch error.');
             }
         } catch (err) {
             btn.innerText = 'Verify Email';
-            updateStatus('Network error: ' + err.message);
+            updateStatus('Network Error: ' + err.message);
         }
     }
+
     function beginTracking(email) {
         if(tracker) clearInterval(tracker);
         tracker = setInterval(async () => {
