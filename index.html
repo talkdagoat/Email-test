@@ -15,79 +15,50 @@
     </style>
 </head>
 <body>
-
 <div class="box">
     <h3>Sign In</h3>
-    
-    <!-- Explicitly telling the input to not use native forms to stop Safari refresh bugs -->
     <input type="email" id="email" placeholder="name@domain.com" required>
-    
-    <!-- type="button" strictly prevents form submission refreshes -->
-    <button type="button" id="action-btn" onclick="requestLink(event)">Verify Email</button>
-
+    <button id="action-btn" onclick="requestLink()">Verify Email</button>
     <div id="status-box" class="alert-box error" style="display: none;"></div>
 </div>
-
 <script>
     let tracker;
-
     function updateStatus(message, isSuccess = false) {
         const statusBox = document.getElementById('status-box');
         statusBox.innerText = message;
         statusBox.style.display = 'block';
         statusBox.className = isSuccess ? 'alert-box success' : 'alert-box error';
     }
-
-    async function requestLink(event) {
-        // Force the browser to kill any implicit refresh behavior
-        if(event) event.preventDefault();
-
+    async function requestLink() {
         const email = document.getElementById('email').value.trim();
-        if (!email) {
-            updateStatus('Please type an email address.');
-            return;
-        }
-
+        if (!email) return updateStatus('Please type an email address.');
         const btn = document.getElementById('action-btn');
-        btn.innerText = 'Connecting to Server...';
-        btn.disabled = true;
-
+        btn.innerText = 'Connecting...';
         try {
-            // Force dynamic URL parsing matching your active Render instance origin
-            const targetUrl = window.location.origin + '/api/auth/send-link';
-            
-            const res = await fetch(targetUrl, {
+            const res = await fetch(window.location.origin + '/api/auth/send-link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email })
             });
-
             const data = await res.json().catch(() => ({}));
-
             if (res.ok) {
                 btn.innerText = 'Sent!';
                 updateStatus('Link Dispatched! Check your email inbox.', true);
                 beginTracking(email);
             } else {
                 btn.innerText = 'Verify Email';
-                btn.disabled = false;
-                updateStatus('Server error: ' + (data.error || 'Check Resend configuration API key.'));
+                updateStatus('Server error: ' + (data.error || 'Check configuration keys.'));
             }
-        } catch (networkError) {
+        } catch (err) {
             btn.innerText = 'Verify Email';
-            btn.disabled = false;
-            updateStatus('Network block: ' + networkError.message);
+            updateStatus('Network error: ' + err.message);
         }
     }
-
     function beginTracking(email) {
-        const statusUrl = window.location.origin + `/api/auth/status?email=${encodeURIComponent(email)}`;
-        
         if(tracker) clearInterval(tracker);
-        
         tracker = setInterval(async () => {
             try {
-                const res = await fetch(statusUrl);
+                const res = await fetch(window.location.origin + '/api/auth/status?email=' + encodeURIComponent(email));
                 if (res.ok) {
                     const status = await res.json();
                     if (status.authenticated) {
@@ -95,9 +66,7 @@
                         updateStatus('Success! Account fully verified. 🎉', true);
                     }
                 }
-            } catch (err) {
-                console.log(err);
-            }
+            } catch (err) { console.log(err); }
         }, 2000);
     }
 </script>
