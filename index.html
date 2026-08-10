@@ -1,4 +1,4 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,82 +9,81 @@
         .box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 280px; text-align: center; border: 1px solid #eaeaea; }
         input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
         button { width: 100%; padding: 10px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
-        .hidden { display: none; }
-        .error-log { margin-top: 15px; padding: 10px; background: #fff0f0; border: 1px solid #ffcaca; color: #cc0000; border-radius: 5px; font-size: 12px; text-align: left; word-break: break-all; }
+        .alert-box { margin-top: 15px; padding: 10px; border-radius: 5px; font-size: 13px; text-align: center; }
+        .error { background: #fff0f0; border: 1px solid #ffcaca; color: #cc0000; }
+        .success { background: #f0fff4; border: 1px solid #dcfce7; color: #15803d; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <!-- Screen Stage 1: Input -->
-    <div id="login-stage">
-        <h3>Sign In</h3>
-        <input type="email" id="email" placeholder="name@domain.com" required>
-        <button id="action-btn" onclick="requestLink()">Verify Email</button>
-    </div>
+    <h3>Sign In</h3>
+    
+    <!-- Explicitly telling the input to not use native forms to stop Safari refresh bugs -->
+    <input type="email" id="email" placeholder="name@domain.com" required>
+    
+    <!-- type="button" strictly prevents form submission refreshes -->
+    <button type="button" id="action-btn" onclick="requestLink(event)">Verify Email</button>
 
-    <!-- Screen Stage 2: Waiting -->
-    <div id="wait-stage" class="hidden">
-        <h3>Link Dispatched</h3>
-        <p>Check your inbox. Tap the confirmation link to immediately trigger validation.</p>
-    </div>
-
-    <!-- Screen Stage 3: Success -->
-    <div id="complete-stage" class="hidden">
-        <h3>Success! 🎉</h3>
-        <p>Access authorized via secure token verification.</p>
-    </div>
-
-    <!-- On-Screen Debugger for iPad Browser -->
-    <div id="debug-box" class="error-log hidden"></div>
+    <div id="status-box" class="alert-box error" style="display: none;"></div>
 </div>
 
 <script>
     let tracker;
 
-    // Helper function to print errors directly onto your iPad screen layout
-    function showDebugError(message) {
-        const debugBox = document.getElementById('debug-box');
-        debugBox.innerText = "Browser Error: " + message;
-        debugBox.classList.remove('hidden');
+    function updateStatus(message, isSuccess = false) {
+        const statusBox = document.getElementById('status-box');
+        statusBox.innerText = message;
+        statusBox.style.display = 'block';
+        statusBox.className = isSuccess ? 'alert-box success' : 'alert-box error';
     }
 
-    async function requestLink() {
-        const email = document.getElementById('email').value;
-        if (!email) return alert('Email required');
+    async function requestLink(event) {
+        // Force the browser to kill any implicit refresh behavior
+        if(event) event.preventDefault();
 
-        document.getElementById('action-btn').innerText = 'Processing...';
-        document.getElementById('debug-box').classList.add('hidden'); // Clear past errors
+        const email = document.getElementById('email').value.trim();
+        if (!email) {
+            updateStatus('Please type an email address.');
+            return;
+        }
 
-        // Construct absolute path using current window location to bypass relative routing bugs
-        const targetUrl = window.location.origin + '/api/auth/send-link';
+        const btn = document.getElementById('action-btn');
+        btn.innerText = 'Connecting to Server...';
+        btn.disabled = true;
 
         try {
+            // Force dynamic URL parsing matching your active Render instance origin
+            const targetUrl = window.location.origin + '/api/auth/send-link';
+            
             const res = await fetch(targetUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email: email })
             });
 
+            const data = await res.json().catch(() => ({}));
+
             if (res.ok) {
-                document.getElementById('login-stage').classList.add('hidden');
-                document.getElementById('wait-stage').classList.remove('hidden');
+                btn.innerText = 'Sent!';
+                updateStatus('Link Dispatched! Check your email inbox.', true);
                 beginTracking(email);
             } else {
-                // If the server answered but returned a failing status code
-                const errorData = await res.json().catch(() => ({ error: 'Unknown server error' }));
-                document.getElementById('action-btn').innerText = 'Verify Email';
-                showDebugError(`Server responded with status ${res.status}. Message: ${errorData.error || JSON.stringify(errorData)}`);
+                btn.innerText = 'Verify Email';
+                btn.disabled = false;
+                updateStatus('Server error: ' + (data.error || 'Check Resend configuration API key.'));
             }
         } catch (networkError) {
-            // If the browser blocked the request completely before hitting Render
-            document.getElementById('action-btn').innerText = 'Verify Email';
-            showDebugError(networkError.message);
+            btn.innerText = 'Verify Email';
+            btn.disabled = false;
+            updateStatus('Network block: ' + networkError.message);
         }
     }
 
     function beginTracking(email) {
         const statusUrl = window.location.origin + `/api/auth/status?email=${encodeURIComponent(email)}`;
+        
+        if(tracker) clearInterval(tracker);
         
         tracker = setInterval(async () => {
             try {
@@ -93,12 +92,11 @@
                     const status = await res.json();
                     if (status.authenticated) {
                         clearInterval(tracker);
-                        document.getElementById('wait-stage').classList.add('hidden');
-                        document.getElementById('complete-stage').classList.remove('hidden');
+                        updateStatus('Success! Account fully verified. 🎉', true);
                     }
                 }
-            } catch (pollError) {
-                console.error("Polling connectivity dropped:", pollError);
+            } catch (err) {
+                console.log(err);
             }
         }, 2000);
     }
