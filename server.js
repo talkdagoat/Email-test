@@ -4,24 +4,23 @@ const crypto = require('crypto');
 
 const app = express();
 
+// Uses the simplified hotmail routing helper for active Outlook accounts
 const transporter = nodemailer.createTransport({
-  host: "://office365.com",
-  port: 587,
-  secure: false, 
+  service: 'hotmail', 
   auth: {
-    user: process.env.OUTLOOK_USER,     
-    pass: process.env.OUTLOOK_APP_PASS  
-  },
-  tls: {
-    rejectUnauthorized: false
+    user: process.env.OUTLOOK_USER,     // Your personal Outlook address
+    pass: process.env.OUTLOOK_APP_PASS  // Your 16-character Microsoft App Password
   }
 });
 
 app.use(express.json());
+
+// Serves index.html directly from your main root directory folder layout
 app.use(express.static(__dirname));
 
 const verificationSessions = {};
 
+// Send verification link endpoint
 app.post('/api/auth/send-link', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
@@ -41,11 +40,12 @@ app.post('/api/auth/send-link', async (req, res) => {
     });
     res.json({ message: 'Email sent successfully!' });
   } catch (error) {
-    console.error("SMTP Error:", error);
+    console.error("SMTP Error Details:", error);
     res.status(500).json({ error: 'Failed to complete mail transmission.' });
   }
 });
 
+// Link verification processor
 app.get('/verify', (req, res) => {
   const { token, email } = req.query;
   const session = verificationSessions[email];
@@ -58,6 +58,7 @@ app.get('/verify', (req, res) => {
   }
 });
 
+// Frontend status polling
 app.get('/api/auth/status', (req, res) => {
   const { email } = req.query;
   const session = verificationSessions[email];
