@@ -40,7 +40,6 @@
         btn.innerText = 'Connecting...';
 
         try {
-            // Talk directly to our backend server
             const res = await fetch(window.location.origin + '/api/auth/send-link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
