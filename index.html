@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>talkapp Login</title>
-    <!-- Embedded standalone build script directly to prevent network block errors -->
-    <script type="text/javascript" src="https://jsdelivr.net"></script>
     <style>
         body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #fafafa; margin: 0; }
         .box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 280px; text-align: center; border: 1px solid #eaeaea; }
@@ -24,7 +22,7 @@
     <div id="status-box" class="alert-box error" style="display: none;"></div>
 </div>
 
-<script type="text/javascript">
+<script>
     let tracker;
 
     function updateStatus(message, isSuccess = false) {
@@ -37,16 +35,12 @@
     async function requestLink() {
         const email = document.getElementById('email').value.trim();
         if (!email) return updateStatus('Please type an email address.');
-        
-        // Safeguard verification step check: wait if network delivery script takes an extra second
-        if (typeof window.emailjs === 'undefined' && typeof window.window?.emailjs === 'undefined') {
-            return updateStatus('Initializing secure network engine... Tap button again in 3 seconds.');
-        }
 
         const btn = document.getElementById('action-btn');
         btn.innerText = 'Connecting...';
 
         try {
+            // 1. Get secure magic link from Render backend instance
             const res = await fetch(window.location.origin + '/api/auth/send-link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -56,18 +50,30 @@
             const data = await res.json();
 
             if (res.ok && data.magicLink) {
-                // Initialize object explicitly inside current scoped run pipeline context 
-                const mailEngine = window.emailjs || window.window?.emailjs;
-                mailEngine.init("rfbFho74v6R1nSzk5");
-
-                await mailEngine.send("talkapp", "template_er3zdx5", {
-                    to_email: email,
-                    verification_link: data.magicLink
+                // 2. Pure native HTTP POST request to EmailJS REST API
+                const emailjsResponse = await fetch('https://emailjs.com', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: "rfbFho74v6R1nSzk5",
+                        service_id: "talkapp",
+                        template_id: "template_er3zdx5",
+                        template_params: {
+                            to_email: email,
+                            verification_link: data.magicLink
+                        }
+                    })
                 });
 
-                btn.innerText = 'Sent!';
-                updateStatus('Link Dispatched! Check your email inbox.', true);
-                beginTracking(email);
+                if (emailjsResponse.ok) {
+                    btn.innerText = 'Sent!';
+                    updateStatus('Link Dispatched! Check your email inbox.', true);
+                    beginTracking(email);
+                } else {
+                    const mailError = await emailjsResponse.text();
+                    btn.innerText = 'Verify Email';
+                    updateStatus('EmailJS Delivery Blocked: ' + mailError);
+                }
             } else {
                 btn.innerText = 'Verify Email';
                 updateStatus('Server initialization mismatch error.');
