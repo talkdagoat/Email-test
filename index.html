@@ -1,104 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>talkapp Login</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #fafafa; margin: 0; }
-        .box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 280px; text-align: center; border: 1px solid #eaeaea; }
-        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
-        button { width: 100%; padding: 10px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
-        .alert-box { margin-top: 15px; padding: 10px; border-radius: 5px; font-size: 13px; text-align: center; }
-        .error { background: #fff0f0; border: 1px solid #ffcaca; color: #cc0000; }
-        .success { background: #f0fff4; border: 1px solid #dcfce7; color: #15803d; }
-    </style>
-</head>
-<body>
-<div class="box">
-    <h3>talkapp Sign In</h3>
-    <input type="email" id="email" placeholder="name@domain.com" required>
-    <button id="action-btn" onclick="requestLink()">Verify Email</button>
-    <div id="status-box" class="alert-box error" style="display: none;"></div>
-</div>
+async function requestLink() {
+    const email = document.getElementById('email').value.trim();
+    if (!email) return updateStatus('Please type an email address.');
 
-<script>
-    let tracker;
+    const btn = document.getElementById('action-btn');
+    btn.innerText = 'Connecting...';
 
-    function updateStatus(message, isSuccess = false) {
-        const statusBox = document.getElementById('status-box');
-        statusBox.innerText = message;
-        statusBox.style.display = 'block';
-        statusBox.className = isSuccess ? 'alert-box success' : 'alert-box error';
-    }
+    try {
+        const res = await fetch(window.location.origin + '/api/auth/send-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const data = await res.json();
 
-    async function requestLink() {
-        const email = document.getElementById('email').value.trim();
-        if (!email) return updateStatus('Please type an email address.');
-
-        const btn = document.getElementById('action-btn');
-        btn.innerText = 'Connecting...';
-
-        try {
-            // 1. Get secure magic link from Render backend instance
-            const res = await fetch(window.location.origin + '/api/auth/send-link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email })
-            });
-            
-            const data = await res.json();
-
-            if (res.ok && data.magicLink) {
-                // 2. Pure native HTTP POST request to EmailJS REST API
-                const emailjsResponse = await fetch('https://emailjs.com', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: "rfbFho74v6R1nSzk5",
-                        service_id: "talkapp",
-                        template_id: "template_er3zdx5",
-                        template_params: {
-                            to_email: email,
-                            verification_link: data.magicLink
-                        }
-                    })
-                });
-
-                if (emailjsResponse.ok) {
-                    btn.innerText = 'Sent!';
-                    updateStatus('Link Dispatched! Check your email inbox.', true);
-                    beginTracking(email);
-                } else {
-                    const mailError = await emailjsResponse.text();
-                    btn.innerText = 'Verify Email';
-                    updateStatus('EmailJS Delivery Blocked: ' + mailError);
-                }
-            } else {
-                btn.innerText = 'Verify Email';
-                updateStatus('Server initialization mismatch error.');
-            }
-        } catch (err) {
+        if (res.ok) {
+            btn.innerText = 'Sent!';
+            updateStatus('Link Dispatched! Check your email inbox.', true);
+            beginTracking(email);
+        } else {
             btn.innerText = 'Verify Email';
-            updateStatus('Network Error: ' + err.message);
+            updateStatus(data.error || 'Server error.');
         }
+    } catch (err) {
+        btn.innerText = 'Verify Email';
+        updateStatus('Network Error: ' + err.message);
     }
-
-    function beginTracking(email) {
-        if(tracker) clearInterval(tracker);
-        tracker = setInterval(async () => {
-            try {
-                const res = await fetch(window.location.origin + '/api/auth/status?email=' + encodeURIComponent(email));
-                if (res.ok) {
-                    const status = await res.json();
-                    if (status.authenticated) {
-                        clearInterval(tracker);
-                        updateStatus('Success! Account fully verified. 🎉', true);
-                    }
-                }
-            } catch (err) { console.log(err); }
-        }, 2000);
-    }
-</script>
-</body>
-</html>
+}
